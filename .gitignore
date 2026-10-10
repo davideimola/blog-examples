@@ -1,2 +1,3 @@
 *.db
 .genkit/
+snapshots-*/

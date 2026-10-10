@@ -18,4 +18,12 @@ No model or API key needed.
 
 ## genkit
 
-Genkit Go (`github.com/firebase/genkit/go` v1.13.1) Agents API with the file session store. Work in progress.
+Genkit Go (`github.com/firebase/genkit/go` v1.13.1) Agents API with the file session store. Every turn writes a new JSON snapshot holding the full conversation, tool output included, so a secret a tool read once is copied into every later snapshot. Old snapshots are never pruned by default. `WithMaxPersistedChainLength(1)` keeps only the latest one, which still holds the secret.
+
+```sh
+cd genkit
+go run .
+grep -o 'DB_PASSWORD=[^\\]*' snapshots-*/global/*.json
+```
+
+No model or API key needed: a fake model drives the tool loop.
