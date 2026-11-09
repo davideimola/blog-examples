@@ -1,0 +1,3 @@
+name: crypto-shredding
+runtime: go
+description: Cloud KMS key ring, split identities and Cloud SQL for crypto-shredding agent sessions

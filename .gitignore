@@ -1,3 +1,5 @@
 *.db
 .genkit/
 snapshots-*/
+crypto-shredding/kms/
+crypto-shredding/backup.sql
