@@ -1,0 +1,49 @@
+# The agent with both doors closed. The same binary, configured differently:
+# the model through the gateway and no key in the pod, writes through the
+# proxy, reads of the web through the fetcher.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: agent
+  namespace: agent
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: agent
+          image: two-doors:dev
+          command: [/bin/agent, run]
+          env:
+            - name: START_DELAY
+              value: 5s
+            - name: MODEL_URL
+              value: http://ai-gateway.envoy-gateway-system.svc.cluster.local/v1
+            - name: FETCHER_URL
+              value: http://fetcher.fetcher.svc.cluster.local
+            - name: WRITE_PROXY
+              value: http://squid.egress-proxy.svc.cluster.local:3128
+            - name: FETCH_USER_URLS_ONLY
+              value: "true"
+---
+# Same configuration, trying the ways around it.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: probe
+  namespace: agent
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: probe
+          image: two-doors:dev
+          command: [/bin/agent, probe]
+          env:
+            - name: START_DELAY
+              value: 5s
+            - name: MODEL_URL
+              value: http://ai-gateway.envoy-gateway-system.svc.cluster.local/v1

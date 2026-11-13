@@ -1,0 +1,94 @@
+# The tool door, split in two.
+#
+# egress-proxy: where the agent's writes go out. It forwards only to the
+# destinations listed in its config, by hostname, which a plain NetworkPolicy
+# cannot do for hosts outside the cluster.
+#
+# fetcher: where the agent's reads of the open web go. It can reach anything,
+# and for that reason it runs apart from the agent and holds nothing.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: egress-proxy
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: squid
+  namespace: egress-proxy
+data:
+  squid.conf: |
+    http_port 3128
+    # The agent writes to the ticket system and nowhere else.
+    acl allowed dstdomain tickets.internet.svc.cluster.local
+    http_access allow allowed
+    http_access deny all
+    access_log none
+    cache deny all
+    pid_filename none
+    # kind hands containers a huge open-files limit and squid sizes its
+    # tables from it, which gets it OOM-killed. 1024 is plenty here.
+    max_filedescriptors 1024
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: squid
+  namespace: egress-proxy
+spec:
+  selector: { matchLabels: { app: squid } }
+  template:
+    metadata: { labels: { app: squid } }
+    spec:
+      containers:
+        - name: squid
+          image: ubuntu/squid:6.10-24.10_beta
+          command: [squid, -f, /etc/squid-demo/squid.conf, -N, -d, "1"]
+          ports: [{ containerPort: 3128 }]
+          volumeMounts:
+            - { name: conf, mountPath: /etc/squid-demo }
+      volumes:
+        - name: conf
+          configMap: { name: squid }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: squid
+  namespace: egress-proxy
+spec:
+  selector: { app: squid }
+  ports: [{ port: 3128, targetPort: 3128 }]
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fetcher
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fetcher
+  namespace: fetcher
+spec:
+  selector: { matchLabels: { app: fetcher } }
+  template:
+    metadata: { labels: { app: fetcher } }
+    spec:
+      # No service account token, no secrets, no volumes: a pod that reads
+      # hostile pages should have nothing to give away.
+      automountServiceAccountToken: false
+      containers:
+        - name: fetcher
+          image: two-doors:dev
+          command: [/bin/fetcher]
+          ports: [{ containerPort: 8080 }]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fetcher
+  namespace: fetcher
+spec:
+  selector: { app: fetcher }
+  ports: [{ port: 80, targetPort: 8080 }]

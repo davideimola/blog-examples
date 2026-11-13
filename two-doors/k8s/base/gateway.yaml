@@ -1,0 +1,127 @@
+# The model door: Envoy AI Gateway in front of the provider.
+#
+# The agent calls an OpenAI-compatible endpoint inside the cluster and never
+# sees a provider key. The gateway routes by the model name in the request
+# body, so only the models declared here exist, and it adds the key itself on
+# the way out.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ai-gateway
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: envoy
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+---
+# ClusterIP and a fixed Service name: the gateway holds the provider key, so
+# nothing outside the cluster should be able to reach it.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: ai-gateway
+  namespace: ai-gateway
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyService:
+        type: ClusterIP
+        name: ai-gateway
+      envoyDeployment:
+        name: ai-gateway
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: ai-gateway
+  namespace: ai-gateway
+spec:
+  gatewayClassName: envoy
+  infrastructure:
+    parametersRef:
+      group: gateway.envoyproxy.io
+      kind: EnvoyProxy
+      name: ai-gateway
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces: { from: Same }
+---
+# The provider, by hostname. In real life: the provider's public API on 443,
+# with a BackendTLSPolicy next to it.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: provider
+  namespace: ai-gateway
+spec:
+  endpoints:
+    - fqdn:
+        hostname: provider.internet.svc.cluster.local
+        port: 80
+---
+apiVersion: aigateway.envoyproxy.io/v1beta1
+kind: AIServiceBackend
+metadata:
+  name: provider
+  namespace: ai-gateway
+spec:
+  schema:
+    name: OpenAI
+    prefix: /v1
+  backendRef:
+    name: provider
+    kind: Backend
+    group: gateway.envoyproxy.io
+---
+# The only copy of the provider key the agent's side of the world has, and it
+# lives with the gateway. In production it comes from a secret store (External
+# Secrets from Vault or Secret Manager), never from a manifest.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: provider-apikey
+  namespace: ai-gateway
+stringData:
+  apiKey: sk-demo-provider-key
+---
+apiVersion: aigateway.envoyproxy.io/v1beta1
+kind: BackendSecurityPolicy
+metadata:
+  name: provider-apikey
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: aigateway.envoyproxy.io
+      kind: AIServiceBackend
+      name: provider
+  type: APIKey
+  apiKey:
+    secretRef:
+      name: provider-apikey
+---
+# One rule per model the agent may use. A model that isn't here doesn't exist
+# as far as the agent is concerned.
+apiVersion: aigateway.envoyproxy.io/v1beta1
+kind: AIGatewayRoute
+metadata:
+  name: models
+  namespace: ai-gateway
+spec:
+  parentRefs:
+    - name: ai-gateway
+      kind: Gateway
+      group: gateway.networking.k8s.io
+  rules:
+    - matches:
+        - headers:
+            - type: Exact
+              name: x-ai-eg-model
+              value: small
+      backendRefs:
+        - name: provider
