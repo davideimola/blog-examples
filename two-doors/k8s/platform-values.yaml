@@ -1,0 +1,21 @@
+# Envoy Gateway with the AI Gateway extension wired in, as the Envoy AI Gateway
+# install guide does it: the controller hooks into the translation and adds
+# the model routing, the key injection and the OpenAI schema handling.
+config:
+  envoyGateway:
+    extensionApis:
+      enableBackend: true
+      enableEnvoyPatchPolicy: true
+    extensionManager:
+      hooks:
+        xdsTranslator:
+          translation:
+            listener: { includeAll: true }
+            route: { includeAll: true }
+            cluster: { includeAll: true }
+            secret: { includeAll: true }
+          post: [Translation, Cluster, Route]
+      service:
+        fqdn:
+          hostname: ai-gateway-controller.envoy-ai-gateway-system.svc.cluster.local
+          port: 1063

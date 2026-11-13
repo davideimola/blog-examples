@@ -1,0 +1,34 @@
+# The agent with both doors open: it holds the provider key and its tools
+# reach whatever they are told to reach. This is how most agents ship.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agent
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: model-key
+  namespace: agent
+stringData:
+  key: sk-demo-provider-key
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: agent
+  namespace: agent
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: agent
+          image: two-doors:dev
+          command: [/bin/agent, run]
+          env:
+            - name: MODEL_URL
+              value: http://provider.internet.svc.cluster.local/v1
+            - name: MODEL_API_KEY
+              valueFrom: { secretKeyRef: { name: model-key, key: key } }

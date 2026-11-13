@@ -6,3 +6,4 @@ Runnable code from posts on [davideimola.dev](https://davideimola.dev). One fold
 |---|---|
 | [agent-sessions](agent-sessions/) | AI Agent Sessions Are a Data Store Nobody Designed (coming soon) |
 | [crypto-shredding](crypto-shredding/) | Crypto-shredding Agent Sessions: Deleting What Your Backups Remember (coming soon) |
+| [two-doors](two-doors/) | Assume the Injection Succeeds: Two Doors Out of Your Agent (coming soon) |

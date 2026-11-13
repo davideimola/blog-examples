@@ -1,0 +1,52 @@
+# Every door closed but the ones we chose. Nothing leaves the agent's
+# namespace unless a rule below says where it may go.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agent
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-egress
+  namespace: agent
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allowed-egress
+  namespace: agent
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    # Names have to resolve.
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: kube-system }
+          podSelector:
+            matchLabels: { k8s-app: kube-dns }
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    # Door one: the model, through the AI gateway's proxy pods only.
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: envoy-gateway-system }
+          podSelector:
+            matchLabels: { gateway.envoyproxy.io/owning-gateway-name: ai-gateway }
+    # Door two: the tools, through the egress proxy (writes) and the fetcher
+    # (reads of the open web).
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: egress-proxy }
+      ports:
+        - { protocol: TCP, port: 3128 }
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: fetcher }
+      ports:
+        - { protocol: TCP, port: 8080 }
